@@ -2420,6 +2420,18 @@ export class StyleManager {
     this._cctvCalibSaveBtn = document.getElementById('cctv-calib-save-btn');
     this._cctvCalibResetBtn = document.getElementById('cctv-calib-reset-btn');
     this._cctvFrame = document.getElementById('cctv-frame');
+    this._cctvVideo = null;
+    if (this._cctvFrame) {
+      const video = document.createElement('video');
+      video.id = 'cctv-video';
+      video.className = this._cctvFrame.className;
+      video.muted = true;
+      video.autoplay = true;
+      video.playsInline = true;
+      video.hidden = true;
+      this._cctvFrame.insertAdjacentElement('afterend', video);
+      this._cctvVideo = video;
+    }
     this._cctvFrameWrap = document.getElementById('cctv-frame-wrap');
     this._cctvFrameRequestToken = 0;
     this._cctvFramePreloader = null;
@@ -6820,8 +6832,24 @@ export class StyleManager {
       }
     }
 
+    const liveStream = (enabled && activeCamera?.isVideo)
+      ? cctvLayer.getActiveMediaStream()
+      : null;
+    if (this._cctvVideo) {
+      if (liveStream) {
+        if (this._cctvVideo.srcObject !== liveStream) {
+          this._cctvVideo.srcObject = liveStream;
+          this._cctvVideo.play().catch(() => {});
+        }
+        this._cctvVideo.hidden = false;
+      } else {
+        if (this._cctvVideo.srcObject) this._cctvVideo.srcObject = null;
+        this._cctvVideo.hidden = true;
+      }
+    }
     if (this._cctvFrame) {
-      const nextSrc = enabled ? activeCamera?.frameUrl : null;
+      this._cctvFrame.hidden = !!liveStream;
+      const nextSrc = (enabled && !liveStream) ? activeCamera?.frameUrl : null;
       const nextCameraId = enabled ? (activeCamera?.id || '') : '';
       const cameraChanged = this._cctvFrame.dataset.cameraId !== nextCameraId;
       const frameLoading = this._cctvFrame.dataset.loading === 'true';
@@ -6836,7 +6864,7 @@ export class StyleManager {
         this._clearCctvFrame();
       }
     }
-
+    this._cctvFrame?.closest('#cctv-panel')?.classList.toggle('has-live-video', !!liveStream);
     this._syncCctvSourceBadge(activeCamera, enabled);
     this._typeCctvSummary(state?.summary || 'Enable CCTV to start camera-linked intelligence summaries.');
   }

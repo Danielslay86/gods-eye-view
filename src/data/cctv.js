@@ -1550,10 +1550,10 @@ function updatePlanePlacement(record) {
   const geometry = record.frustumGeometry
     || computeFrustumGeometry(record.camera, groundAltFor(record), record.probeClampRangeM);
   const positions = record.frustumPositions || frustumCartesians(geometry);
-  runtime.planeEntity.position = positions.capCenter;
+  runtime.planeEntity.position = position.capCenter;
   runtime.planeEntity.orientation = planeOrientationFor(record.camera, positions.capCenter);
-  if (runtime.planeEntity.plane) {
-    runtime.planeEntity.plane.dimensions = new Cesium.Cartesian2(
+  if (runtime.planEntity.plane) {
+    runtime.planEntity.plane.dimensions = new Cesium.Cartesian2(
       geometry.halfW * 2,
       geometry.halfH * 2
     );
@@ -1619,7 +1619,7 @@ function createProjectionPlane(record, runtime, geometry, positions) {
       outlineColor: PLANE_OUTLINE_COLOR,
     },
   });
-  return runtime.planeEntity;
+  return runtime.planEntity;
 }
 
 /**
@@ -1656,6 +1656,64 @@ export function _updateCctvProjectionPlaneForTest(record) {
 }
 
 /**
+ * Binds a media URL to the runtime's <video>. HLS playlists play natively only
+ * in Safari/iOS; every other browser needs hls.js as the demuxer. The import
+ * is dynamic so the bundle carries no HLS code for stills-only catalogs.
+ * @param {Object} runtime - Projection runtime holding `.video`.
+ * @param {string} url - Same-origin media URL (proxied).
+ * @param {string} feedType - Canonical feed type.
+ */
+async function attachVideoSource(runtime, url, feedType) {
+  const video = runtime?.video;
+  if (!video) return;
+  if (feedType !== 'hls') {
+    video.src = url;
+    return;
+  }
+  try {
+    const { default: Hls } = await import('hls.js');
+    if (runtime.video !== video) return;
+    if (!Hls.isSupported()) {
+      video.src = url;
+      return;
+    }
+    const hls = new Hls({
+      lowLatencyMode: false, 
+      enableWorker: true,
+      // DOT streams cut 8-12s segments
+      liveSyncDurationCount: 3,
+      liveMaxLatencyDurationCount: 6,
+      maxBufferLength: 60,
+      backBufferLength: 30,
+    });
+    hls.on(Hls.Events.ERROR, (_event, data) => {
+      if(!data?.fatal) return;
+      if(data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        // reread master for a fresh session
+        console.warn('[Data:CCTV] hls network error, reloading source:', data.details);
+        setTimeout(() => {
+          if (runtime.hls === hls) hls.loadSource(url);
+        }, 2000);
+        return;
+      }
+      if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+        hls.recoverMediaError();
+        return;
+      }
+      console.warn('[Data:CCTV] hls fatal:', data.type, data.details);
+      hls.destroy();
+      if (runtime.hls === hls) runtime.hls = null;
+    });
+    hls.loadSource(url);
+    hls.attachMedia(video);
+    runtime.hls = hls;
+  } catch (error) {
+    console.warn('[Data:CCTV] hls.js unavailable:', error?.message || error);
+    video.src = url;
+  }
+}
+
+/**
  * Creates the projection runtime for a camera record: an offscreen canvas,
  * the monitor plane plus associated host label, and either an
  * <img> or <video> element depending on the feed type.
@@ -1684,6 +1742,7 @@ function createProjectionRuntime(record) {
     image: null,
     video: null,
     planeEntity: null,
+  
     cameraId: String(record.camera.id),
     labelPosition: new Cesium.Cartesian3(),
     overlayEntry: null,
@@ -1713,17 +1772,22 @@ function createProjectionRuntime(record) {
 
   if (mode === 'video') {
     const video = document.createElement('video');
+    // Cesium sizes the video texture from the elements width/height attributes
+    video.width = PROJECTION_CANVAS_WIDTH;
+    video.height = PROJECTION_CANVAS_HEIGHT;
     video.muted = true;
     video.loop = true;
     video.autoplay = true;
     video.playsInline = true;
     video.crossOrigin = 'anonymous';
     video.preload = 'auto';
-    video.src = mediaUrlFor(record.camera);
     video.addEventListener('canplay', () => {
       video.play().catch(() => {});
     });
+ 
     runtime.video = video;
+    runtime.hls = null;
+    attachVideoSource(runtime, mediaUrlFor(record.camera), normalizeFeedType(record.camera?.feedType));
   } else {
     const img = new Image();
     img.decoding = 'async';
@@ -1748,9 +1812,10 @@ function createProjectionRuntime(record) {
     || computeFrustumGeometry(record.camera, groundAltFor(record), record.probeClampRangeM);
   const positions = record.frustumPositions || frustumCartesians(geometry);
   runtime.planeMaterial = new Cesium.ImageMaterialProperty({
-    image: (mode === 'video' && runtime.video) ? runtime.video : canvas,
+    image: runtime.video || canvas,
     transparent: true,
-    color: Cesium.Color.WHITE.withAlpha(0.95),
+    // Video: fully opaque, so the imagery beneath cannot shimmer through moving texture.
+    color: Cesium.Color.WHITE.withAlpha(runtime.video ? 1.0 : 0.95),
   });
   createProjectionPlane(record, runtime, geometry, positions);
 
@@ -1780,6 +1845,14 @@ function ensureProjectionRuntime(record) {
  */
 function destroyProjectionRuntime(runtime) {
   if (!runtime) return;
+  if (runtime.hls) {
+    runtime.hls.destroy();
+    runtime.hls = null;
+  }
+  if (runtime.mediaStream) {
+    runtime.mediaStream.getTracks().forEach((track) => track.stop());
+    runtime.mediaStream = null;
+  }
   if (runtime.video) {
     runtime.video.pause();
     runtime.video.removeAttribute('src');
@@ -1863,12 +1936,7 @@ function drawProjectionFrame(record) {
 
   if (runtime.mode === 'video' && runtime.video) {
     const video = runtime.video;
-    if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
-      runtime.ctx.clearRect(0, 0, PROJECTION_CANVAS_WIDTH, PROJECTION_CANVAS_HEIGHT);
-      runtime.ctx.drawImage(video, 0, 0, PROJECTION_CANVAS_WIDTH, PROJECTION_CANVAS_HEIGHT);
-      runtime.canvasStamp = (runtime.canvasStamp || 0) + 1;
-      return;
-    }
+    if (video.readyState >= 2 && video.videoWidth > 0) return;
     paintPlaceholderThrottled(record, runtime, health);
     return;
   }
@@ -1947,7 +2015,7 @@ function startProjectionLoop() {
     const active = getActiveRecord();
     if (_enabled && _showProjection && active) {
       ensureProjectionRuntime(active);
-      if (active.projection?.video) {
+      if (active.projection?.video?.paused) {
         active.projection.video.play().catch(() => {});
       }
       if (active.projection) {
@@ -2142,6 +2210,7 @@ function updateRecordGeometry(record, options = {}) {
     const excludeObjects = [...(record.coverageEntities || [])];
     if (record.billboard) excludeObjects.push(record.billboard);
     if (record.projection?.planeEntity) excludeObjects.push(record.projection.planeEntity);
+
     sampleMeshFloorCells(_viewer?.scene, [point], {
       excludeObjects: excludeObjects.filter(Boolean),
       viewerLat: viewerCarto ? Cesium.Math.toDegrees(viewerCarto.latitude) : undefined,
@@ -2625,8 +2694,9 @@ function getActiveRecord() {
 function pauseInactiveProjectionFeeds(activeId) {
   for (const record of _records) {
     if (!record.projection?.video) continue;
-    if (record.camera.id === activeId && _enabled && _showProjection) {
-      record.projection.video.play().catch(() => {});
+    // Active camera stream keeeps running with projection off.
+    if (record.camera.id === activeId && _enabled) {
+    record.projection.video.play().catch(() => {});
     } else {
       record.projection.video.pause();
     }
@@ -3249,7 +3319,9 @@ export function refreshCoverageStyles() {
       // The frustum wireframe is part of the projection representation —
       // force it on for the active camera and let it read through geometry
       // via depthFailMaterial (polylines have no disableDepthTestDistance).
-      entity.show = !!(_enabled && ((coverageOn && inVisibleSet) || planeShowing));
+      // Active cameras cone is part of its projection representation; with projection off
+      // it should not be displayed.
+      entity.show = !!(_enabled && ((coverageOn && inVisibleSet && !isActive) || planeShowing));
       if (!entity.polyline) continue;
       // Viewshed mode swaps the cyan/green scheme for the camera's own hue so
       // adjacent cones read as distinct coverage claims (design §3b); the
@@ -3403,6 +3475,7 @@ function getPublicCameraState(record, activeId = null) {
     mountHeightM: camera.mountHeightM,
     active: isActive,
     feedType: camera.feedType,
+    isVideo: isVideoFeedType(normalizeFeedType(camera.feedType)),
     sourceKind: health?.sourceKind || camera.sourceKind || (camera.feedConfigured ? 'configured' : 'seed'),
     sourceStatus: health?.status || 'unknown',
     sourceMessage: health?.message || '',
@@ -3921,8 +3994,8 @@ function extractPickedCameraId(picked) {
       : maybeProp;
     const record = typeof value === 'string' ? _recordById.get(value) : null;
     const ownsCoverageEntity = Boolean(record?.coverageEntities?.includes(entity));
-    const ownsProjectionEntity = record?.projection?.planeEntity === entity
-      || _projectionEntities.some((runtime) => (
+    const ownsProjectionEntity = record?.projection?.planeEntity === entity ||
+      _projectionEntities.some((runtime) => (
         runtime?.cameraId === value && runtime.planeEntity === entity
       ));
     if (record && (ownsCoverageEntity || ownsProjectionEntity)) return value;
@@ -4739,6 +4812,26 @@ const cctvLayer = {
    */
   getUIState() {
     return uiState();
+  },
+
+  /**
+   * MediaStream mirroring the active camera's decoded video, for a second surface
+   * without a second decoder. Null when the active feed is a still, not yet attached,
+   * or captureStream is unsupported. 
+   * @returns {MediaStream|null}
+   */
+  getActiveMediaStream() {
+    const runtime = getActiveRecord()?.projection;
+    const video = runtime?.video;
+    if(!video || typeof video.captureStream !== 'function') return null;
+    if (!runtime.mediaStream) {
+      try {
+        runtime.mediaStream = video.captureStream();
+      } catch {
+        return null;
+      }
+    }
+    return runtime.mediaStream;
   },
 
   /**

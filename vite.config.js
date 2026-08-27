@@ -4648,10 +4648,28 @@ function cctvProxy() {
           }
 
           if (url.pathname.startsWith('/media/')) {
-            const cameraId = decodeURIComponent(url.pathname.replace('/media/', '').trim()) || 'camera';
+            const mediaPath = url.pathname.replace('/media/', '');
+            const slash = mediaPath.indexOf('/');
+            const cameraId = decodeURIComponent((slash === -1 ? mediaPath : mediaPath.slice(0, slash)).trim()) || 'camera';
+            const rel = slash === -1 ? '' : mediaPath.slice(slash + 1);
             const source = sourceById.get(cameraId);
             const mediaUrl = source?.url || '';
             const feedType = normalizeFeedType(source?.feedType || 'image');
+
+            let target = null;
+            if (mediaUrl && /^https?:\/\//i.test(mediaUrl)) {
+              try {
+                target = rel ? new URL(rel + url.search, new URL(mediaUrl).origin) : new URL(mediaUrl);
+                if (target.origin !== new URL(mediaUrl).origin) target = null;
+              } catch {
+                target = null;
+              }
+            }
+            if (rel && !target) {
+              res.writeHead(403, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+              res.end(JSON.stringify({ error: 'Media sub-path escapes camera origin' }));
+              return;
+            }
 
             if (!mediaUrl || !/^https?:\/\//i.test(mediaUrl)) {
               setHealth(cameraId, {
@@ -4669,7 +4687,7 @@ function cctvProxy() {
               const upstreamHeaders = { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' };
               const requestRange = req.headers?.range;
               if (requestRange) upstreamHeaders.Range = requestRange;
-              const upstream = await fetch(mediaUrl, {
+              const upstream = await fetch(target.toString(), {
                 headers: upstreamHeaders,
               });
               const contentType = upstream.headers.get('content-type') || '';
@@ -4700,6 +4718,38 @@ function cctvProxy() {
                   message: isVideoFeedType(feedType) ? 'Live stream connected' : 'Snapshot feed connected',
                 });
               }
+
+              if (contentType.includes('mpegurl')) {
+                const text = await readResponseTextCapped(upstream, 1024 * 1024);
+                const prefix = `/api/cctv/media/${encodeURIComponent(cameraId)}`;
+                const toProxyPath = (ref) => {
+                  try {
+                    const abs = new URL(ref, target);
+                    if (abs.origin !== target.origin) return null;
+                    return `${prefix}${abs.pathname}${abs.search}`;
+                  } catch {
+                    return null;
+                  }
+                };
+                const rewritten = text.split('\n').map((line) => {
+                  const trimmed = line.trim();
+                  if (!trimmed) return line;
+                  if (trimmed.startsWith('#')) {
+                    return line.replace(/URI="([^"]+)"/g, (m, ref) => {
+                      const p = toProxyPath(ref);
+                      return p ? `URI="${p}"` : m;
+                    });
+                  }
+                  return toProxyPath(trimmed) ?? line;
+                }).join('\n');
+                res.writeHead(200, {
+                  'Content-Type': contentType,
+                  'Cache-Control': 'no-store',
+                  'X-CCTV-Source': 'live-media',
+                });
+                res.end(rewritten);
+                return;
+              }              
 
               await proxyMediaResponse(res, upstream, {
                 sourceHeader: isVideoFeedType(feedType) ? 'live-media' : 'upstream-image',

@@ -4619,6 +4619,12 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   max-height: 100%;
   pointer-events: auto;
 }
+#right-context-rail #cctv-panel.has-live-video {
+  width: 480px;
+  /* Wider than the rail: shift left by the overflow so the right edges stay
+     aligned instead of hanging off-screen. */
+  margin-left: calc(100% - 480px);
+}
 #right-context-rail #cctv-panel.collapsed {
   width: var(--right-display-collapsed-width);
   margin-left: auto;
@@ -6386,7 +6392,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   }
 }
 
-#cctv-frame {
+#cctv-frame, #cctv-video {
   width: 100%;
   /* A fixed 16:9 box with the frame CONTAINED inside it. Providers burn their
      timestamp into a corner (TfL top-left, Austin bottom-left) and the old
@@ -6403,8 +6409,14 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   transition: opacity 180ms ease;
 }
 
-#cctv-frame.active {
+#cctv-frame.active, #cctv-video:not([hidden]) {
   opacity: 1;
+}
+
+/* 'display: block' would override the hidden attribute. */
+#cctv-frame[hidden],
+#cctv-video[hidden] {
+  display: none;
 }
 
 #cctv-meta {

@@ -1,0 +1,32 @@
+[
+    {
+    "id": "de-kcam025",
+    "name": "DE 1 @ Main Toll Plaza",
+    "city": "Dover", "cityId": "dover", "provider": "DelDOT",
+    "lat": 39.18481, "lon": -75.515299,
+    "headingDeg": 40,
+    "pitchDeg": 5,
+    "fovDeg": 60,
+    "rangeM": 120,
+    "mountHeightM": 50,
+    "feedType": "hls",
+    "url": "rtmpt://video.deldot.gov:80/live/KCAM025.stream",
+    "sourceKind": "deldot-open-data",
+    "license": "Public DelDOT traffic camera stream"
+  },
+  {
+    "id": "de-kcam031",
+    "name": "DE 8 @ Saulsbury Rd",
+    "city": "Dover", "cityId": "dover", "provider": "DelDOT",
+    "lat": 39.159117, "lon": -75.542656,
+    "headingDeg": 180,
+    "pitchDeg": 5,
+    "fovDeg": 60,
+    "rangeM": 120,
+    "mountHeightM": 100,
+    "feedType": "hls",
+    "url": "rtmpt://video.deldot.gov:1935/live/KCAM031.stream",
+    "sourceKind": "deldot-open-data",
+    "license": "Public DelDOT traffic camera stream"
+  }
+]

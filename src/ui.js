@@ -6840,6 +6840,18 @@ export class StyleManager {
         if (this._cctvVideo.srcObject !== liveStream) {
           this._cctvVideo.srcObject = liveStream;
           this._cctvVideo.play().catch(() => {});
+          const track = liveStream.getVideoTracks()[0];
+          if (track) {
+            track.addEventListener('ended', () => {
+              // hls.js reset its pipeline; the captured track died with it.
+              // Re-pull a fresh stream from the still-playing element.
+              const fresh = cctvLayer.getActiveMediaStream();
+              if (fresh && this._cctvVideo) {
+                this._cctvVideo.srcObject = fresh;
+                this._cctvVideo.play().catch(() => {});
+              }
+            }, { once: true });
+          }
         }
         this._cctvVideo.hidden = false;
       } else {

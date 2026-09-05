@@ -273,7 +273,7 @@ Thirteen layers and map sources. **Eleven have a keyless path.** Some offer addi
 | 🛰️ **Satellites** | 838-object catalog, color-coded by class with a live legend — the **DENSE** chip drops in the whole Starlink shell | CelesTrak | 🟢 |
 | 🌍 **Earthquakes** | Global seismic activity, last 24h | USGS | 🟢 |
 | 🚗 **Traffic** | Simulated vehicles on OSM roads. With TomTom, live flow speeds drive the simulation and congestion colors below ~8 km; individual vehicle positions are not live observations | TomTom + OSM | 🟢 simulation · 🟡 live flow speeds |
-| 📹 **CCTV Mesh** | ~800 public cameras projected *into* the 3D space — Austin · California (Caltrans) · London (TfL). Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs | 🟢 |
+| 📹 **CCTV Mesh** | ~800 public cameras projected *into* the 3D space — Austin · California (Caltrans) · London (TfL) · Delaware (DelDOT, **live video**). Stills refresh in place; video feeds play continuously on the monitor plane and in the panel. Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City / state DOT APIs | 🟢 |
 | 📻 **Radio** | Geolocated world radio with an **analog tuner** — drag the needle across up to 750 stations and the globe flies to each broadcaster | Radio Browser / broadcasters | 🟢 |
 | 🚲 **Bikeshare** | Live station availability | GBFS | 🟢 |
 | 🔥 **Active Fires** | Live NASA FIRMS detections, trailing 24h | NASA FIRMS | 🟡 |
@@ -425,6 +425,32 @@ security add-generic-password -U -s "cesium-ion"      -a "token"   -w
 ```
 
 OpenSky can run fully anonymous (`OPENSKY_AUTH_MODE=anon`), or import OAuth credentials with `./scripts/opensky-import-client.sh /path/to/credentials.json`.
+
+</details>
+
+<details>
+<summary>Live video cameras (HLS / RTMP)</summary>
+
+CCTV sources with `"feedType": "hls"` play as continuous video instead of
+refreshed stills. The server owns the stream: it keeps one upstream session
+per active camera, serves the browser a locally generated playlist, and the
+client plays it through hls.js. Two upstream strategies, chosen by URL:
+
+- **`.m3u8` upstreams** are pulled directly in Node — no extra dependencies.
+- **RTMP and other stream URLs** go through **ffmpeg** (`-c copy`, no
+  re-encode), which is optional: without it those cameras fall back to the
+  stills path and everything else is unchanged. If you self-host in Docker,
+  add `ffmpeg` to your image.
+
+The bundled Delaware pack (`config/cctv_sources.delaware.json`) is a working
+example — two DelDOT cameras on `rtmp://video.deldot.gov:1935/…`; if your
+network blocks 1935, `rtmpt://video.deldot.gov:80/…` is the same stream
+tunneled over HTTP.
+
+Some agencies restart their streams on a timer or run encoders whose clock
+lags real time (DelDOT does both). The pipeline absorbs that automatically —
+a brief hitch at a restart, and a playback-rate governor that holds the
+stream a few seconds behind live so it never starves. Nothing to configure.
 
 </details>
 

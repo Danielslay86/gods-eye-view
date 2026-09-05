@@ -1550,10 +1550,10 @@ function updatePlanePlacement(record) {
   const geometry = record.frustumGeometry
     || computeFrustumGeometry(record.camera, groundAltFor(record), record.probeClampRangeM);
   const positions = record.frustumPositions || frustumCartesians(geometry);
-  runtime.planeEntity.position = position.capCenter;
+  runtime.planeEntity.position = positions.capCenter;
   runtime.planeEntity.orientation = planeOrientationFor(record.camera, positions.capCenter);
-  if (runtime.planEntity.plane) {
-    runtime.planEntity.plane.dimensions = new Cesium.Cartesian2(
+  if (runtime.planeEntity.plane) {
+    runtime.planeEntity.plane.dimensions = new Cesium.Cartesian2(
       geometry.halfW * 2,
       geometry.halfH * 2
     );
@@ -1619,7 +1619,7 @@ function createProjectionPlane(record, runtime, geometry, positions) {
       outlineColor: PLANE_OUTLINE_COLOR,
     },
   });
-  return runtime.planEntity;
+  return runtime.planeEntity;
 }
 
 /**
@@ -1678,17 +1678,16 @@ async function attachVideoSource(runtime, url, feedType) {
       return;
     }
     const hls = new Hls({
-      lowLatencyMode: false, 
+      lowLatencyMode: false,
       enableWorker: true,
-      // DOT streams cut 8-12s segments
-      liveSyncDurationCount: 3,
+      liveSyncDurationCount: 5,
       liveMaxLatencyDurationCount: 6,
       maxBufferLength: 60,
       backBufferLength: 30,
     });
     hls.on(Hls.Events.ERROR, (_event, data) => {
-      if(!data?.fatal) return;
-      if(data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+      if (!data?.fatal) return;
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
         // reread master for a fresh session
         console.warn('[Data:CCTV] hls network error, reloading source:', data.details);
         setTimeout(() => {
@@ -1707,6 +1706,23 @@ async function attachVideoSource(runtime, url, feedType) {
     hls.loadSource(url);
     hls.attachMedia(video);
     runtime.hls = hls;
+
+    // Rate governor: DelDOT cameras deliver ~52 s of content per 60 s wall
+    // time. Hold playbackRate by buffer depth so the stream never starves;
+    // cameras with honest clocks sit at 1.0 and never leave it.
+    const governor = setInterval(() => {
+      if (runtime.video !== video || !runtime.hls) { clearInterval(governor); return; }
+      const b = video.buffered;
+      if (!b.length) return;
+      const ahead = b.end(b.length - 1) - video.currentTime;
+      let rate = 1.0;
+      if (ahead < 15) rate = 0.75;
+      else if (ahead < 20) rate = 0.85;
+      else if (ahead < 30) rate = 0.93;
+      else if (ahead > 40) rate = 1.05;
+      if (Math.abs(video.playbackRate - rate) > 0.01) video.playbackRate = rate;
+    }, 1000);
+    runtime.rateGovernor = governor;
   } catch (error) {
     console.warn('[Data:CCTV] hls.js unavailable:', error?.message || error);
     video.src = url;
@@ -1742,7 +1758,6 @@ function createProjectionRuntime(record) {
     image: null,
     video: null,
     planeEntity: null,
-  
     cameraId: String(record.camera.id),
     labelPosition: new Cesium.Cartesian3(),
     overlayEntry: null,
@@ -1772,9 +1787,6 @@ function createProjectionRuntime(record) {
 
   if (mode === 'video') {
     const video = document.createElement('video');
-    // Cesium sizes the video texture from the elements width/height attributes
-    video.width = PROJECTION_CANVAS_WIDTH;
-    video.height = PROJECTION_CANVAS_HEIGHT;
     video.muted = true;
     video.loop = true;
     video.autoplay = true;
@@ -1784,7 +1796,19 @@ function createProjectionRuntime(record) {
     video.addEventListener('canplay', () => {
       video.play().catch(() => {});
     });
- 
+    // Cesium sizes the video texture from the element's width/height
+    // attributes at first upload. Set them from the real stream dimensions
+    // and rebind on any resolution change (camera switch, adaptive source).
+    const bindVideoTexture = () => {
+      if (runtime.video !== video || !runtime.planeMaterial) return;
+      if (!(video.videoWidth > 0 && video.videoHeight > 0)) return;
+      video.width = video.videoWidth;
+      video.height = video.videoHeight;
+      runtime.planeMaterial.image = runtime.canvas;
+      runtime.planeMaterial.image = video;
+    };
+    video.addEventListener('loadedmetadata', bindVideoTexture);
+    video.addEventListener('resize', bindVideoTexture);
     runtime.video = video;
     runtime.hls = null;
     attachVideoSource(runtime, mediaUrlFor(record.camera), normalizeFeedType(record.camera?.feedType));
@@ -1812,7 +1836,7 @@ function createProjectionRuntime(record) {
     || computeFrustumGeometry(record.camera, groundAltFor(record), record.probeClampRangeM);
   const positions = record.frustumPositions || frustumCartesians(geometry);
   runtime.planeMaterial = new Cesium.ImageMaterialProperty({
-    image: runtime.video || canvas,
+    image: canvas,
     transparent: true,
     // Video: fully opaque, so the imagery beneath cannot shimmer through moving texture.
     color: Cesium.Color.WHITE.withAlpha(runtime.video ? 1.0 : 0.95),
@@ -1849,6 +1873,7 @@ function destroyProjectionRuntime(runtime) {
     runtime.hls.destroy();
     runtime.hls = null;
   }
+  if (runtime.rateGovernor) { clearInterval(runtime.rateGovernor); runtime.rateGovernor = null; }
   if (runtime.mediaStream) {
     runtime.mediaStream.getTracks().forEach((track) => track.stop());
     runtime.mediaStream = null;
@@ -2210,7 +2235,6 @@ function updateRecordGeometry(record, options = {}) {
     const excludeObjects = [...(record.coverageEntities || [])];
     if (record.billboard) excludeObjects.push(record.billboard);
     if (record.projection?.planeEntity) excludeObjects.push(record.projection.planeEntity);
-
     sampleMeshFloorCells(_viewer?.scene, [point], {
       excludeObjects: excludeObjects.filter(Boolean),
       viewerLat: viewerCarto ? Cesium.Math.toDegrees(viewerCarto.latitude) : undefined,
@@ -2694,9 +2718,9 @@ function getActiveRecord() {
 function pauseInactiveProjectionFeeds(activeId) {
   for (const record of _records) {
     if (!record.projection?.video) continue;
-    // Active camera stream keeeps running with projection off.
+    // Active camera stream keeps running with projection off.
     if (record.camera.id === activeId && _enabled) {
-    record.projection.video.play().catch(() => {});
+      record.projection.video.play().catch(() => {});
     } else {
       record.projection.video.pause();
     }
@@ -3319,7 +3343,7 @@ export function refreshCoverageStyles() {
       // The frustum wireframe is part of the projection representation —
       // force it on for the active camera and let it read through geometry
       // via depthFailMaterial (polylines have no disableDepthTestDistance).
-      // Active cameras cone is part of its projection representation; with projection off
+      // Active camera's cone is part of its projection representation; with projection off
       // it should not be displayed.
       entity.show = !!(_enabled && ((coverageOn && inVisibleSet && !isActive) || planeShowing));
       if (!entity.polyline) continue;
@@ -3994,8 +4018,8 @@ function extractPickedCameraId(picked) {
       : maybeProp;
     const record = typeof value === 'string' ? _recordById.get(value) : null;
     const ownsCoverageEntity = Boolean(record?.coverageEntities?.includes(entity));
-    const ownsProjectionEntity = record?.projection?.planeEntity === entity ||
-      _projectionEntities.some((runtime) => (
+    const ownsProjectionEntity = record?.projection?.planeEntity === entity
+      || _projectionEntities.some((runtime) => (
         runtime?.cameraId === value && runtime.planeEntity === entity
       ));
     if (record && (ownsCoverageEntity || ownsProjectionEntity)) return value;
@@ -4817,13 +4841,18 @@ const cctvLayer = {
   /**
    * MediaStream mirroring the active camera's decoded video, for a second surface
    * without a second decoder. Null when the active feed is a still, not yet attached,
-   * or captureStream is unsupported. 
+   * or captureStream is unsupported.
    * @returns {MediaStream|null}
    */
   getActiveMediaStream() {
     const runtime = getActiveRecord()?.projection;
     const video = runtime?.video;
     if(!video || typeof video.captureStream !== 'function') return null;
+    const stale = runtime.mediaStream?.getVideoTracks?.().some((t) => t.readyState === 'ended');
+    if (stale) {
+      runtime.mediaStream.getTracks().forEach((t) => t.stop());
+      runtime.mediaStream = null;
+    }
     if (!runtime.mediaStream) {
       try {
         runtime.mediaStream = video.captureStream();

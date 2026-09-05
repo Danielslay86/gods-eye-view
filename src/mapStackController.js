@@ -366,6 +366,7 @@ export class MapStackController {
       provider = new Cesium.OpenStreetMapImageryProvider({
         url: 'https://tile.openstreetmap.org/',
         credit: DEFAULT_OSM_CREDIT,
+        maximumLevel: 19,
       });
     } else {
       throw new Error(`Unsupported map stack: ${stack.id}`);

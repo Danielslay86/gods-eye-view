@@ -104,14 +104,22 @@ export const TXDOT_DEFAULT_ELEVATION_M = 150;
 export const CALTRANS_CCTV_URL = (district) =>
   `https://cwwp2.dot.ca.gov/data/d${district}/cctv/cctvStatusD${String(district).padStart(2, '0')}.json`;
 /** Districts fetched by default: SF Bay (4), LA (7), San Diego (11), Sacramento (3). */
-export const DEFAULT_CALTRANS_DISTRICTS = '4,7,11,3';
-export const DEFAULT_CALTRANS_MAX_SOURCES = 300;
+export const DEFAULT_CALTRANS_DISTRICTS = '1,2,3,4,5,6,7,8,9,10,11,12';
+export const DEFAULT_CALTRANS_MAX_SOURCES = 500;
 /** Prioritization anchors: downtown cores of the four default metros. */
 export const CALTRANS_ANCHORS = [
-  { lat: 37.7793, lon: -122.4193 }, // San Francisco
-  { lat: 34.0537, lon: -118.2428 }, // Los Angeles
-  { lat: 32.7157, lon: -117.1611 }, // San Diego
-  { lat: 38.5816, lon: -121.4944 }, // Sacramento
+  { lat: 37.7793, lon: -122.4193 }, // San Francisco (D4)
+  { lat: 34.0537, lon: -118.2428 }, // Los Angeles (D7)
+  { lat: 32.7157, lon: -117.1611 }, // San Diego (D11)
+  { lat: 38.5816, lon: -121.4944 }, // Sacramento (D3)
+  { lat: 40.8021, lon: -124.1637 }, // Eureka (D1)
+  { lat: 40.5865, lon: -122.3917 }, // Redding (D2)
+  { lat: 35.2828, lon: -120.6596 }, // San Luis Obispo (D5)
+  { lat: 36.7378, lon: -119.7871 }, // Fresno (D6)
+  { lat: 34.1083, lon: -117.2898 }, // San Bernardino (D8)
+  { lat: 37.9577, lon: -121.2908 }, // Stockton (D10)
+  { lat: 37.3614, lon: -118.399 }, // Bishop (D9)
+  { lat: 33.7455, lon: -117.8677 }, // Santa Ana (D12)
 ];
 /** TfL JamCams: one keyless list endpoint; frames live on a public S3 bucket. */
 export const TFL_JAMCAM_URL = 'https://api.tfl.gov.uk/Place/Type/JamCam';

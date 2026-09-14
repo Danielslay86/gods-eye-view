@@ -229,6 +229,9 @@ export async function loadCaltransSourcesFromOpenData() {
       const lon = toFiniteNumber(loc.longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
 
+      const streamUrl = String(cctv.imageData?.streamingVideoURL || '').trim();
+      const hasStream = /^https:\/\/wzmedia\.dot\.ca\.gov\//i.test(streamUrl);
+
       const imageUrl = String(cctv.imageData?.static?.currentImageURL || '');
       // Official-host pin (see JSDoc). Also drops records with no still image.
       if (!imageUrl.startsWith('https://cwwp2.dot.ca.gov/')) continue;
@@ -277,8 +280,8 @@ export async function loadCaltransSourcesFromOpenData() {
             ? Math.max(-100, Math.min(4000, ft * 0.3048))
             : 150;
         })(),
-        feedType: 'image',
-        url: imageUrl,
+        feedType: hasStream ? 'hls' : 'image',
+        url: hasStream ? streamUrl : imageUrl,
         snapshotUrl: imageUrl,
         sourceKind: 'caltrans-open-data',
         license: 'Public Caltrans highway camera frame',
@@ -290,7 +293,7 @@ export async function loadCaltransSourcesFromOpenData() {
     process.env.CCTV_CALTRANS_MAX_SOURCES || DEFAULT_CALTRANS_MAX_SOURCES,
   );
   const maxCount = Number.isFinite(maxRaw)
-    ? Math.max(8, Math.min(600, Math.floor(maxRaw)))
+    ? Math.max(8, Math.min(2000, Math.floor(maxRaw)))
     : DEFAULT_CALTRANS_MAX_SOURCES;
   const prioritized = prioritizeSources(cameras, maxCount, CALTRANS_ANCHORS);
   console.log(

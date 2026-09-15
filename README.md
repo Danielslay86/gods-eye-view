@@ -275,7 +275,7 @@ Thirteen layers and map sources. **Eleven have a keyless path.** Some offer addi
 | 🛰️ **Satellites** | 838-object catalog, color-coded by class with a live legend — the **DENSE** chip drops in the whole Starlink shell | CelesTrak | 🟢 |
 | 🌍 **Earthquakes** | Global seismic activity, last 24h | USGS | 🟢 |
 | 🚗 **Traffic** | Simulated vehicles on OSM roads. With TomTom, live flow speeds drive the simulation and congestion colors below ~8 km; individual vehicle positions are not live observations | TomTom + OSM | 🟢 simulation · 🟡 live flow speeds |
-| 📹 **CCTV Mesh** | ~3,700 public cameras projected *into* the 3D space — Austin · Texas (TxDOT) · California (Caltrans) · London (TfL) · Ontario (511) · Finland (Fintraffic) · British Columbia (DriveBC) · Estonia (Tallinn, Tarktee) · New South Wales (Live Traffic NSW) · Delaware (DelDOT, **live video**). Stills refresh in place; video feeds play continuously on the monitor plane and in the panel. Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City / state DOT APIs | 🟢 |
+| 📹 **CCTV Mesh** | ~3,700 public cameras projected *into* the 3D space — Austin · Texas (TxDOT) · California (Caltrans, **live video**) · London (TfL) · Ontario (511) · Finland (Fintraffic) · British Columbia (DriveBC) · Estonia (Tallinn, Tarktee) · New South Wales (Live Traffic NSW) · Delaware (DelDOT, **live video**). Stills refresh in place; video feeds play continuously on the monitor plane and in the panel. Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City / state DOT APIs | 🟢 |
 | 📻 **Radio** | Geolocated world radio with an **analog tuner** — drag the needle across up to 750 stations and the globe flies to each broadcaster | Radio Browser / broadcasters | 🟢 |
 | 🚲 **Bikeshare** | Live station availability | GBFS | 🟢 |
 | 🔥 **Active Fires** | Live NASA FIRMS detections, trailing 24h | NASA FIRMS | 🟡 |
@@ -443,6 +443,10 @@ client plays it through hls.js. Two upstream strategies, chosen by URL:
   re-encode), which is optional: without it those cameras fall back to the
   stills path and everything else is unchanged. If you self-host in Docker,
   add `ffmpeg` to your image.
+
+California (Caltrans) is the HLS example: nearly every camera publishes an 
+`.m3u8` stream, pulled directly in Node with no ffmpeg, which is the lighter 
+of the two paths.
 
 The DelDOT Delaware pack is the working example — every `Active` camera in
 DelDOT's public catalog registers with its `rtmpt://video.deldot.gov:80/…`

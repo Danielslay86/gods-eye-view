@@ -16,7 +16,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { CCTV_MEDIA_FETCH_TIMEOUT_MS } from './constants.js';
 
 /**
@@ -287,14 +287,10 @@ export function createHlsRemuxer() {
   /** @type {Map<string,{proc:import('node:child_process').ChildProcess|null,dir:string,upstreamUrl:string,lastAccess:number,nextSeg:number,respawnTimer:NodeJS.Timeout|null,stopping:boolean}>} */
   const active = new Map();
   let available = null;
-  const isAvailable = () => {
-    if (available !== null) return available;
-    try {
-      const probe = spawn('ffmpeg', ['-version'], { stdio: 'ignore' });
-      probe.on('error', () => { available = false; });
-      available = true;
-    } catch {
-      available = false;
+    const isAvailable = () => {
+    if (available === null) {
+      const probe = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore', timeout: 5000 });
+      available = !probe.error && probe.status === 0;
     }
     return available;
   };
@@ -327,13 +323,15 @@ export function createHlsRemuxer() {
   const spawnProducer = (cameraId, entry) => {
     if (entry.stopping) return;
     entry.boundaries.push(entry.nextSeg);
+    const isRtmp = /^rtmp/i.test(entry.upstreamUrl);
     const proc = spawn('ffmpeg', [
       '-nostdin', '-loglevel', 'warning',
-      ...(/^rtmp/i.test(entry.upstreamUrl)
+      ...(isRtmp
         ? ['-rtmp_live', 'live', '-rw_timeout', '10000000',
            '-fflags', 'nobuffer', '-analyzeduration', '1000000', '-probesize', '500000']
         : ['-user_agent', 'gods-eye-view-cctv-proxy/1.0',
          '-reconnect', '1', '-reconnect_on_network_error', '1', '-reconnect_delay_max', '1']),
+      '-protocol_whitelist', isRtmp ? 'rtmp,rtmpt,ffrtmphttp,http,tcp' : 'http,https,tcp,tls',
       '-i', entry.upstreamUrl,
       '-c', 'copy',
       '-f', 'segment',

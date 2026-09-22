@@ -160,6 +160,7 @@
       "server/providers/cctv/normalize.js",
       "server/providers/cctv/range.js",
       "server/providers/cctv/sources.js",
+      "server/providers/cctv/stream.js",
       "server/providers/common/http.js",
       "src/data/directionText.js",
       "server/providers/common/geo.js",
@@ -963,7 +964,7 @@
       "src/data/inputOwnership.js",
       "src/layers/cctv/sourcePolicy.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "hls.js"]
   },
   "alpr-cameras": {
     "exports": ["./layers/alpr"],
@@ -1671,6 +1672,7 @@
       "@mapbox/vector-tile",
       "cesium",
       "egm96-universal",
+      "hls.js",
       "mgrs",
       "pbf",
       "satellite.js"
@@ -2054,7 +2056,8 @@
       "satellite.js",
       "@mapbox/vector-tile",
       "pbf",
-      "mgrs"
+      "mgrs",
+      "hls.js"
     ]
   },
   "application-operations": {

@@ -447,21 +447,25 @@ refreshed stills. The server owns the stream: it keeps one upstream session
 per active camera, serves the browser a locally generated playlist, and the
 client plays it through hls.js. Two upstream strategies, chosen by URL:
 
-- **`.m3u8` upstreams** are pulled directly in Node — no extra dependencies.
+- **`.m3u8` upstreams** are pulled directly in Node, with no extra
+  dependencies.
 - **RTMP and other stream URLs** go through **ffmpeg** (`-c copy`, no
   re-encode), which is optional: without it those cameras fall back to the
   stills path and everything else is unchanged. If you self-host in Docker,
   add `ffmpeg` to your image.
 
-The DelDOT Delaware pack is the working example — every `Active` camera in
-DelDOT's public catalog registers with its `rtmpt://video.deldot.gov:80/…`
-stream (the same stream as `rtmp://…:1935`, tunneled over HTTP, so it works
-where port 1935 is blocked). `CCTV_DELDOT_ENABLED=0` turns the pack off.
+The DelDOT Delaware pack is the working example. It registers the `Active`
+cameras in DelDOT's public catalog nearest its anchors (300 by default;
+`CCTV_DELDOT_MAX_SOURCES` changes the cap), each with its
+`rtmpt://video.deldot.gov:80/…` stream. That is the same stream as
+`rtmp://…:1935`, tunneled over HTTP, so it works where port 1935 is blocked.
+`CCTV_DELDOT_ENABLED=0` turns the pack off.
 
 Some agencies restart their streams on a timer or run encoders whose clock
-lags real time (DelDOT does both). The pipeline absorbs that automatically —
-a brief hitch at a restart, and a playback-rate governor that holds the
-stream a few seconds behind live so it never starves. Nothing to configure.
+lags real time, and DelDOT does both. The pipeline absorbs that
+automatically: a brief hitch at each restart, and a playback-rate governor
+that keeps the stream 20 to 30 seconds behind live so it never starves.
+Nothing to configure.
 
 </details>
 

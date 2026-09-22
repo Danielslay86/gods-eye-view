@@ -495,9 +495,11 @@ depth, so encoders that deliver less than real time play without stalling
 (DelDOT delivers about 52 seconds per minute). Cameras with a real-time clock
 stay at 1.0.
 
-The DelDOT pack registers every `Active` camera in DelDOT's public catalog
-(`tmc.deldot.gov/json/videocamera.json`) using its
-`rtmpt://video.deldot.gov:80` stream. `CCTV_DELDOT_ENABLED=0` turns it off.
+The DelDOT pack reads DelDOT's public catalog
+(`tmc.deldot.gov/json/videocamera.json`) and registers the `Active` cameras
+nearest its anchors (300 by default; `CCTV_DELDOT_MAX_SOURCES` changes the
+cap), each using its `rtmpt://video.deldot.gov:80` stream.
+`CCTV_DELDOT_ENABLED=0` turns it off.
 
 
 ## GBFS upstream bounds

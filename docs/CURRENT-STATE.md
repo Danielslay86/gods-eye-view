@@ -475,6 +475,30 @@ responses are cancelled. Buffered snapshots have a 16 MiB streaming cap; an
 oversized image remains an upstream miss and uses the normal fallback chain.
 The existing declared media size ceiling remains 64 MiB.
 
+## CCTV live video
+
+Cameras whose source `feedType` is `hls` play continuous video instead of
+refreshed stills. `server/providers/cctv/stream.js` owns the upstream session.
+`.m3u8` upstreams go through a Node puller that polls the chunklist every two
+seconds and re-reads the master playlist when a session expires. Other stream
+URLs, such as RTMP, go through ffmpeg with `-c copy`. ffmpeg is optional;
+without it those cameras use the still path. Both strategies write MPEG-TS
+segments to a per-camera directory under the OS temp dir, keep a short rolling
+window, remove the directory after 60 seconds without a viewer, and serve a
+proxy-generated playlist under `/api/cctv/media/<id>/`. Sub-paths resolve only
+against the registered camera's origin.
+
+The browser loads hls.js on demand and plays that playlist in one video
+element, which feeds both the projection plane and the panel card's canvas. A
+playback-rate governor holds `playbackRate` between 0.75 and 1.05 by buffer
+depth, so encoders that deliver less than real time play without stalling
+(DelDOT delivers about 52 seconds per minute). Cameras with a real-time clock
+stay at 1.0.
+
+The DelDOT pack registers every `Active` camera in DelDOT's public catalog
+(`tmc.deldot.gov/json/videocamera.json`) using its
+`rtmpt://video.deldot.gov:80` stream. `CCTV_DELDOT_ENABLED=0` turns it off.
+
 
 ## GBFS upstream bounds
 

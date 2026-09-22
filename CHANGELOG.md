@@ -1,5 +1,7 @@
 # Changelog
 
+- Add live video for CCTV cameras that publish a stream. The proxy owns one upstream session per actively viewed camera (a Node puller for HLS, an optional ffmpeg remux for RTMP) and serves its own playlist, which the browser plays through hls.js on both the monitor plane and the panel card. Add a statewide DelDOT (Delaware) pack as the first live-video source.
+
 - Widen opaque sensor halos to 3 display pixels with a 30 px fleet core while retaining at least 60% opaque core coverage, adding contrast margin through thermal blur and bloom on bright roofs.
 
 - Exclude Noir's intentionally vignetted outer field from transit core measurements and add separate Boston live oblique selection/readability coverage.

@@ -142,6 +142,12 @@ export const DATA_CREDITS = [
       'CCTV cameras &amp; frames (California): Caltrans — ' +
       '<a href="https://cwwp2.dot.ca.gov/" target="_blank" rel="noopener">cwwp2.dot.ca.gov</a>',
   },
+    {
+    key: 'deldot-cctv',
+    html:
+      'CCTV cameras &amp; live video (Delaware): ' +
+      '<a href="https://deldot.gov/map/" target="_blank" rel="noopener">Delaware Department of Transportation</a> (courtesy)',
+  },
   {
     key: 'tfl-cctv',
     html:

@@ -187,27 +187,27 @@ export async function loadAustinSourcesFromOpenData() {
 }
 
 /**
- * Caltrans HLS URL pinned to CALTRANS_STREAM_ORIGIN, district path shape, no credentials
+ * Caltrans HLS URL pinned to CALTRANS_STREAM_ORIGIN, district path shape, no credentials,
+ * query, or fragment.
  *
  * @param {unknown} value Raw streamingVideoURL field from a Caltrans record.
  * @returns {string} The validated stream href, or '' if the value is not a usable Caltrans
  * stream URL.
  */
 export function caltransStreamUrl(value) {
-  // Most Caltrans cameras also publish an HTTPS HLS stream. Register it as
-  // live video when it passes the same checks DelDOT's stream does; a
-  // missing or unexpected URL leaves the camera on its still image.
   try {
     const stream = new URL(String(value || ''));
     if (
       stream.origin === CALTRANS_STREAM_ORIGIN &&
       !stream.username &&
       !stream.password &&
+      !stream.search &&
+      !stream.hash &&
       /^\/D\d{1,2}\/[A-Za-z0-9_.-]+\.stream\/playlist\.m3u8$/.test(
         stream.pathname,
       )
     ) {
-      return stream.href;
+      return `${stream.origin}${stream.pathname}`;
     }
     return '';
   } catch {

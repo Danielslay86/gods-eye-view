@@ -113,6 +113,8 @@ export const CALTRANS_ANCHORS = [
   { lat: 32.7157, lon: -117.1611 }, // San Diego
   { lat: 38.5816, lon: -121.4944 }, // Sacramento
 ];
+/** Only host accepted for Caltrans HLS streams. */
+export const CALTRANS_STREAM_ORIGIN = 'https://wzmedia.dot.ca.gov';
 /** TfL JamCams: one keyless list endpoint; frames live on a public S3 bucket. */
 export const TFL_JAMCAM_URL = 'https://api.tfl.gov.uk/Place/Type/JamCam';
 export const TFL_IMAGE_ORIGIN =

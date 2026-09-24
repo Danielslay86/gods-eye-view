@@ -5,6 +5,7 @@ import {
   DEFAULT_AUSTIN_MAX_SOURCES,
   AUSTIN_DOWNTOWN,
   CALTRANS_CCTV_URL,
+  CALTRANS_STREAM_ORIGIN,
   DEFAULT_CALTRANS_DISTRICTS,
   DEFAULT_CALTRANS_MAX_SOURCES,
   CALTRANS_ANCHORS,
@@ -186,6 +187,36 @@ export async function loadAustinSourcesFromOpenData() {
 }
 
 /**
+ * Caltrans HLS URL pinned to CALTRANS_STREAM_ORIGIN, district path shape, no credentials
+ *
+ * @param {unknown} value Raw streamingVideoURL field from a Caltrans record.
+ * @returns {string} The validated stream href, or '' if the value is not a usable Caltrans
+ * stream URL.
+ */
+export function caltransStreamUrl(value) {
+  // Most Caltrans cameras also publish an HTTPS HLS stream. Register it as
+  // live video when it passes the same checks DelDOT's stream does; a
+  // missing or unexpected URL leaves the camera on its still image.
+  try {
+    const stream = new URL(String(value || ''));
+    if (
+      stream.origin === CALTRANS_STREAM_ORIGIN &&
+      !stream.username &&
+      !stream.password &&
+      /^\/D\d{1,2}\/[A-Za-z0-9_.-]+\.stream\/playlist\.m3u8$/.test(
+        stream.pathname,
+      )
+    ) {
+      return stream.href;
+    }
+    return '';
+  } catch {
+    // "Not Reported" and blank values are not URLs.
+    return '';
+  }
+}
+
+/**
  * Fetch Caltrans CCTV cameras for the configured districts (CCTV_CALTRANS_DISTRICTS,
  * comma-separated 1..12; empty string disables the pack). One official JSON feed per
  * district, identical schema statewide; keyless. Only inService cameras with finite
@@ -240,6 +271,10 @@ export async function loadCaltransSourcesFromOpenData() {
       // Official-host pin (see JSDoc). Also drops records with no still image.
       if (!imageUrl.startsWith('https://cwwp2.dot.ca.gov/')) continue;
 
+      // Most Caltrans cameras also publish an HTTPS HLS stream. Register it as
+      // live video when it passes validation; a missing or unexpected URL
+      // leaves the camera on its still image.
+      const streamUrl = caltransStreamUrl(cctv.imageData?.streamingVideoURL);
       const locationName = String(loc.locationName || '').trim();
       // Leading token of locationName is the stable camera code ("TV102 -- I-580 : …").
       const codeMatch = /^([A-Za-z0-9_-]+)\s*--/.exec(locationName);
@@ -284,8 +319,8 @@ export async function loadCaltransSourcesFromOpenData() {
             ? Math.max(-100, Math.min(4000, ft * 0.3048))
             : 150;
         })(),
-        feedType: 'image',
-        url: imageUrl,
+        feedType: streamUrl ? 'hls' : 'image',
+        url: streamUrl || imageUrl,
         snapshotUrl: imageUrl,
         sourceKind: 'caltrans-open-data',
         license: 'Public Caltrans highway camera frame',

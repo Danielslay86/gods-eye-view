@@ -581,6 +581,11 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   address grid — so headings use the shared id-hash fallback at low confidence
   and are corrected with the calibration gizmo. `CCTV_CALGARY_MAX_SOURCES` sets
   the cap and `CCTV_CALGARY_ENABLED=0` turns the pack off.
+- Add live video for Caltrans cameras (#NNN): a district record's
+  `streamingVideoURL` registers the camera as live HLS when it is an official
+  HTTPS link on `wzmedia.dot.ca.gov` with no credentials, query, or fragment.
+  Any other value keeps the camera on its still frame, and a stream that does
+  not start falls back to the still.
 - **Transit layer** — keyless buses, trams, subways, trains and ferries in
   Boston, Austin, Minneapolis–St Paul, Helsinki, the Netherlands, Norway and
   South East Queensland. Vehicles use delayed timestamp playback and explicit

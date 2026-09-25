@@ -171,7 +171,7 @@ export const DATA_CREDITS = [
   {
     key: 'caltrans-cctv',
     html:
-      'CCTV cameras &amp; frames (California): Caltrans — ' +
+      'CCTV cameras, frames &amp; live video (California): Caltrans — ' +
       '<a href="https://cwwp2.dot.ca.gov/" target="_blank" rel="noopener">cwwp2.dot.ca.gov</a>',
   },
   {

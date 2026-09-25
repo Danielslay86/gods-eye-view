@@ -4309,7 +4309,10 @@ factory are added to its viewer and removed on destruction.
 
 Daniel Slay's shared-decoder panel/projection feature is adapted to bounded
 HTTP(S) HLS. DelDOT uses official HTTPS HLS URLs; RTMP/ffmpeg remux is excluded
-because subprocess transport does not inherit the Node redirect policy. Server
+because subprocess transport does not inherit the Node redirect policy. Caltrans
+cameras take the same path when their district record carries an official
+`https://wzmedia.dot.ca.gov` HLS link; other Caltrans cameras stay on their
+still frame, which also takes over when a stream fails to start. Server
 sessions reserve synchronously, cap memory and response bytes, reject redirects,
 and abort on release/shutdown. No disk store or background sweep exists while
 inactive. The panel paints the same video at at most 640px/15 fps; collapse stops
